@@ -1,29 +1,29 @@
 output "vpc_id" {
   description = "ID of the main VPC"
-  value       = module.vpc.vpc_id
+  value       = aws_vpc.main.id
 }
 
 output "public_subnet_ids" {
   description = "List of public subnet IDs"
-  value       = module.vpc.public_subnet_ids
+  value       = [for subnet in aws_subnet.public : subnet.id]
 }
 
 output "private_subnet_ids" {
   description = "List of private subnet IDs"
-  value       = module.vpc.private_subnet_ids
+  value       = [for subnet in aws_subnet.private : subnet.id]
 }
 
 output "public_route_table_id" {
   description = "ID of the public route table"
-  value       = module.vpc.public_route_table_id
+  value       = aws_route_table.public.id
 }
 
 output "private_route_table_id" {
   description = "ID of the private route table"
-  value       = module.vpc.private_route_table_id
+  value       = aws_route_table.private.id
 }
 
 output "nat_gateway_id" {
   description = "List of NAT gateway IDs"
-  value       = module.vpc.nat_gateway_id
+  value       = [for nat_gateway in aws_nat_gateway.nat_gateway : nat_gateway.id]
 }
