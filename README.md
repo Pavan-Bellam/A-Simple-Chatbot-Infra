@@ -188,13 +188,26 @@ This Terraform configuration will create:
 
 ## Usage
 
-After completing the setup:
+After completing the setup steps above:
 
 1. Review your variable customizations in `variables.tf`
-2. Plan your changes: `terraform plan`
+2. Plan your changes:
+   ```bash
+   terraform plan -var-file=terraform.tfvars  # if using tfvars
+   # or simply
+   terraform plan
+   ```
 3. Review the plan output carefully
-4. Apply changes: `terraform apply`
-5. Destroy resources when no longer needed: `terraform destroy`
+4. Apply changes:
+   ```bash
+   terraform apply
+   ```
+5. Destroy resources when no longer needed:
+   ```bash
+   terraform destroy
+   ```
+
+**Note**: Since you've initialized with a backend configuration (`terraform init -backend-config=backend.dev.hcl`), Terraform will automatically use the remote state backend. You don't need to specify the backend config for `plan`, `apply`, or `destroy` commands.
 
 **Cost Optimization**: By default, NAT Gateway is disabled and RDS uses minimal settings. Enable Multi-AZ and NAT Gateway only when needed for production workloads.
 
