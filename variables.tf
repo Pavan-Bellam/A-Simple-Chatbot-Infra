@@ -32,5 +32,56 @@ variable "availability_zones" {
 variable "enable_nat_gateway" {
   description = "Enable NAT gateway for private subnet internet access"
   type        = bool
-  default     = true
+  default     = false
+}
+
+
+#rds
+variable "db_name" {
+  type        = string
+  default     = "chatbotDB"
+  description = "Name of the database"
+}
+
+variable "db_username" {
+  type        = string
+  default     = "chatbot_user"
+  description = "Username for the database"
+  sensitive   = true
+}
+
+variable "db_password" {
+  type        = string
+  default     = "chatbot_password"
+  description = "Password for the database"
+  sensitive   = true
+}
+
+variable "db_instance_type" {
+  type        = string
+  default     = "db.t3.micro"
+  description = "Instance type for the database"
+}
+
+variable "multi_az" {
+  type        = bool
+  default     = false
+  description = "Whether to deploy the database in multiple availability zones for high availability(Failover)"
+}
+
+variable "db_storage_size" {
+  type        = number
+  default     = 10
+  description = "Storage size for the database"
+}
+
+variable "db_engine_version" {
+  type        = string
+  default     = "15.8"
+  description = "Engine version for the database"
+}
+
+variable "db_engine" {
+  type    = string
+  default = "postgres"
 }
