@@ -4,13 +4,52 @@ Terraform infrastructure setup for a simple chatbot application with AWS remote 
 
 ## Overview
 
-This repository contains Terraform configurations to manage infrastructure for a chatbot application. It includes a bootstrap setup for creating an S3 bucket to store Terraform state files with versioning enabled.
+This repository contains Terraform configurations to manage infrastructure for a chatbot application, including:
+- **VPC Module**: Configurable VPC with public/private subnets, Internet Gateway, NAT Gateway (optional), and route tables
+- **RDS Module**: PostgreSQL database instance with security groups and subnet groups
+- **SSM Module**: AWS Systems Manager Parameter Store for securely storing database credentials
+- **Bootstrap Setup**: S3 bucket for Terraform remote state management with versioning
+
+**Note**: All default values in `variables.tf` are configured to incur **low to no cost**. You should customize these values based on your production requirements.
 
 ## Prerequisites
 
+### Required Tools
 - Terraform (compatible with AWS provider ~> 6.15.0)
 - AWS CLI configured with appropriate credentials
-- AWS account with permissions to create S3 buckets and manage resources
+
+### Required AWS IAM Permissions
+
+Before running this Terraform project, ensure your AWS IAM user/role has the following permissions:
+
+#### S3 (for Terraform state backend)
+- `s3:CreateBucket`, `s3:DeleteBucket`
+- `s3:GetBucketVersioning`, `s3:PutBucketVersioning`
+- `s3:GetBucketTagging`, `s3:PutBucketTagging`
+- `s3:ListBucket`, `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`
+
+#### EC2/VPC
+- `ec2:CreateVpc`, `ec2:DeleteVpc`, `ec2:DescribeVpcs`, `ec2:ModifyVpcAttribute`
+- `ec2:CreateSubnet`, `ec2:DeleteSubnet`, `ec2:DescribeSubnets`, `ec2:ModifySubnetAttribute`
+- `ec2:CreateInternetGateway`, `ec2:DeleteInternetGateway`, `ec2:AttachInternetGateway`, `ec2:DetachInternetGateway`, `ec2:DescribeInternetGateways`
+- `ec2:CreateRouteTable`, `ec2:DeleteRouteTable`, `ec2:DescribeRouteTables`
+- `ec2:CreateRoute`, `ec2:DeleteRoute`, `ec2:AssociateRouteTable`, `ec2:DisassociateRouteTable`
+- `ec2:AllocateAddress`, `ec2:ReleaseAddress`, `ec2:DescribeAddresses`
+- `ec2:CreateNatGateway`, `ec2:DeleteNatGateway`, `ec2:DescribeNatGateways` (if enabling NAT Gateway)
+- `ec2:CreateSecurityGroup`, `ec2:DeleteSecurityGroup`, `ec2:DescribeSecurityGroups`
+- `ec2:AuthorizeSecurityGroupIngress`, `ec2:AuthorizeSecurityGroupEgress`, `ec2:RevokeSecurityGroupIngress`, `ec2:RevokeSecurityGroupEgress`
+- `ec2:CreateTags`, `ec2:DeleteTags`, `ec2:DescribeTags`
+
+#### RDS
+- `rds:CreateDBInstance`, `rds:DeleteDBInstance`, `rds:DescribeDBInstances`, `rds:ModifyDBInstance`
+- `rds:CreateDBSubnetGroup`, `rds:DeleteDBSubnetGroup`, `rds:DescribeDBSubnetGroups`
+- `rds:AddTagsToResource`, `rds:RemoveTagsFromResource`, `rds:ListTagsForResource`
+
+#### SSM Parameter Store
+- `ssm:PutParameter`, `ssm:GetParameter`, `ssm:GetParameters`, `ssm:DeleteParameter`
+- `ssm:DescribeParameters`, `ssm:AddTagsToResource`, `ssm:RemoveTagsFromResource`, `ssm:ListTagsForResource`
+
+**Tip**: You can create a custom IAM policy with these permissions or use AWS managed policies like `PowerUserAccess` (not recommended for production).
 
 ## Project Structure
 
@@ -20,9 +59,24 @@ A-Simple-Chatbot-Infra/
 │   ├── providers.tf       # AWS provider configuration
 │   ├── s3.tf             # S3 bucket and versioning resources
 │   └── output.tf         # Outputs bucket name
-├── providers.tf          # Main provider configuration with S3 backend
-├── backend.dev.hcl       # Backend configuration for dev environment (gitignored)
-└── backend.example.hcl   # Example backend configuration template
+├── modules/
+│   ├── vpc/               # VPC module with subnets, IGW, NAT, route tables
+│   │   ├── vpc.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   ├── rds/               # RDS PostgreSQL module with security groups
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   └── ssm/               # SSM Parameter Store module for secrets
+│       ├── main.tf
+│       └── variables.tf
+├── main.tf                # Root module configuration
+├── variables.tf           # Input variables (customize these!)
+├── outputs.tf             # Output values
+├── providers.tf           # Provider configuration with S3 backend
+├── backend.dev.hcl        # Backend configuration for dev environment (gitignored)
+└── backend.example.hcl    # Example backend configuration template
 ```
 
 ## Setup Instructions
@@ -57,7 +111,30 @@ Edit `backend.dev.hcl` with your environment-specific settings:
 - `encrypt`: Enable encryption for state files
 - `bucket_lock_enabled`: Enable state locking
 
-### Step 3: Initialize Main Configuration
+### Step 3: Configure Variables
+
+**Important**: Before deploying, review and customize the values in `variables.tf` according to your requirements:
+
+**VPC Configuration**:
+- `vpc_cidr`: CIDR block for your VPC (default: `10.0.0.0/16`)
+- `public_subnet_cidrs`: CIDR blocks for public subnets (default: `["10.0.1.0/24", "10.0.2.0/24"]`)
+- `private_subnet_cidrs`: CIDR blocks for private subnets (default: `["10.0.3.0/24", "10.0.4.0/24"]`)
+- `availability_zones`: AZs for subnet deployment (default: `["us-east-1a", "us-east-1b"]`)
+- `enable_nat_gateway`: Enable NAT Gateway for private subnets (default: `false` to minimize cost)
+
+**RDS Configuration**:
+- `db_name`: Database name (default: `chatbotDB`)
+- `db_username`: Database username (default: `chatbot_user`) - **Change this!**
+- `db_password`: Database password (default: `chatbot_password`) - **Change this immediately!**
+- `db_engine`: Database engine (default: `postgres`)
+- `db_engine_version`: PostgreSQL version (default: `15.8`)
+- `db_instance_type`: Instance type (default: `db.t3.micro` - free tier eligible)
+- `db_storage_size`: Allocated storage in GB (default: `10`)
+- `multi_az`: Enable Multi-AZ deployment (default: `false` to minimize cost)
+
+**Security Warning**: The default credentials are placeholders. **You must change `db_username` and `db_password` before deploying to any environment!**
+
+### Step 4: Initialize Main Configuration
 
 Initialize the main Terraform configuration with the backend:
 
@@ -81,14 +158,45 @@ bucket_lock_enabled = true
 
 The project uses AWS provider version `~> 6.15.0` and targets the `us-east-1` region by default.
 
+## Infrastructure Resources
+
+This Terraform configuration will create:
+
+**VPC Module**:
+- 1 VPC with DNS support and hostnames enabled
+- 2 Public subnets (configurable)
+- 2 Private subnets (configurable)
+- 1 Internet Gateway
+- 1 Public route table with internet route
+- 1 Private route table
+- 1 NAT Gateway with Elastic IP (optional, disabled by default for cost savings)
+
+**RDS Module**:
+- 1 PostgreSQL RDS instance (db.t3.micro, 10GB storage)
+- 1 DB subnet group spanning private subnets
+- 1 Security group for RDS (rules to be added when ALB is created)
+- Storage encryption enabled
+- Automated backups (1-day retention)
+
+**SSM Module**:
+- 5 SSM parameters for database credentials and connection info:
+  - `/chatbot/db/username`
+  - `/chatbot/db/password` (SecureString)
+  - `/chatbot/db/endpoint`
+  - `/chatbot/db/name`
+  - `/chatbot/db/port`
+
 ## Usage
 
 After completing the setup:
 
-1. Make changes to your Terraform configurations
+1. Review your variable customizations in `variables.tf`
 2. Plan your changes: `terraform plan`
-3. Apply changes: `terraform apply`
-4. Destroy resources (if needed): `terraform destroy`
+3. Review the plan output carefully
+4. Apply changes: `terraform apply`
+5. Destroy resources when no longer needed: `terraform destroy`
+
+**Cost Optimization**: By default, NAT Gateway is disabled and RDS uses minimal settings. Enable Multi-AZ and NAT Gateway only when needed for production workloads.
 
 ## Environment Management
 
