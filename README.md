@@ -8,6 +8,7 @@ This repository contains Terraform configurations to manage infrastructure for a
 - **VPC Module**: Configurable VPC with public/private subnets, Internet Gateway, NAT Gateway (optional), and route tables
 - **RDS Module**: PostgreSQL database instance with security groups and subnet groups
 - **SSM Module**: AWS Systems Manager Parameter Store for securely storing database credentials
+- **ECS Module**: ECS cluster with EC2 launch type, autoscaling, capacity providers, and containerized application deployment
 - **Bootstrap Setup**: S3 bucket for Terraform remote state management with versioning
 
 **Note**: All default values in `variables.tf` are configured to incur **low to no cost**. You should customize these values based on your production requirements.
@@ -49,6 +50,27 @@ Before running this Terraform project, ensure your AWS IAM user/role has the fol
 - `ssm:PutParameter`, `ssm:GetParameter`, `ssm:GetParameters`, `ssm:DeleteParameter`
 - `ssm:DescribeParameters`, `ssm:AddTagsToResource`, `ssm:RemoveTagsFromResource`, `ssm:ListTagsForResource`
 
+#### ECS (Elastic Container Service)
+- `ecs:CreateCluster`, `ecs:DeleteCluster`, `ecs:DescribeClusters`
+- `ecs:CreateService`, `ecs:DeleteService`, `ecs:DescribeServices`, `ecs:UpdateService`
+- `ecs:RegisterTaskDefinition`, `ecs:DeregisterTaskDefinition`, `ecs:DescribeTaskDefinition`
+- `ecs:CreateCapacityProvider`, `ecs:DeleteCapacityProvider`, `ecs:DescribeCapacityProviders`
+- `ecs:PutClusterCapacityProviders`
+
+#### AutoScaling (for ECS capacity provider)
+- `autoscaling:CreateAutoScalingGroup`, `autoscaling:DeleteAutoScalingGroup`, `autoscaling:DescribeAutoScalingGroups`, `autoscaling:UpdateAutoScalingGroup`
+- `autoscaling:CreateLaunchConfiguration`, `autoscaling:DeleteLaunchConfiguration`
+- `autoscaling:DescribeLaunchConfigurations`
+- `ec2:CreateLaunchTemplate`, `ec2:DeleteLaunchTemplate`, `ec2:DescribeLaunchTemplates`
+- `ec2:RunInstances`, `ec2:TerminateInstances`, `ec2:DescribeInstances`
+
+#### IAM (for ECS roles)
+- `iam:CreateRole`, `iam:DeleteRole`, `iam:GetRole`, `iam:ListRoles`
+- `iam:CreatePolicy`, `iam:DeletePolicy`, `iam:GetPolicy`
+- `iam:AttachRolePolicy`, `iam:DetachRolePolicy`, `iam:ListAttachedRolePolicies`
+- `iam:CreateInstanceProfile`, `iam:DeleteInstanceProfile`, `iam:AddRoleToInstanceProfile`, `iam:RemoveRoleFromInstanceProfile`
+- `iam:PassRole`
+
 **Tip**: You can create a custom IAM policy with these permissions or use AWS managed policies like `PowerUserAccess` (not recommended for production).
 
 ## Project Structure
@@ -68,9 +90,18 @@ A-Simple-Chatbot-Infra/
 │   │   ├── main.tf
 │   │   ├── variables.tf
 │   │   └── outputs.tf
-│   └── ssm/               # SSM Parameter Store module for secrets
-│       ├── main.tf
-│       └── variables.tf
+│   ├── ssm/               # SSM Parameter Store module for secrets
+│   │   ├── main.tf
+│   │   └── variables.tf
+│   └── ecs/               # ECS cluster module with EC2 instances
+│       ├── cluster.tf
+│       ├── service.tf
+│       ├── task_definition.tf
+│       ├── asg.tf
+│       ├── iam.tf
+│       ├── sg.tf
+│       ├── variables.tf
+│       └── outputs.tf
 ├── main.tf                # Root module configuration
 ├── variables.tf           # Input variables (customize these!)
 ├── outputs.tf             # Output values
@@ -132,7 +163,26 @@ Edit `backend.dev.hcl` with your environment-specific settings:
 - `db_storage_size`: Allocated storage in GB (default: `10`)
 - `multi_az`: Enable Multi-AZ deployment (default: `false` to minimize cost)
 
-**Security Warning**: The default credentials are placeholders. **You must change `db_username` and `db_password` before deploying to any environment!**
+**ECS Configuration**:
+- `cluster_name`: Name of the ECS cluster (default: `chatbot-ecs-cluster`)
+- `container_image`: Docker image URI - **Required, no default!** (e.g., `123456789012.dkr.ecr.us-east-1.amazonaws.com/chatbot:latest`)
+- `container_port`: Port exposed by container (default: `8080`)
+- `task_cpu`: CPU units for task (default: `512` = 0.5 vCPU)
+- `task_memory`: Memory for task in MB (default: `1024` = 1GB)
+- `ecs_instance_type`: EC2 instance type (default: `t3.micro` - free tier eligible)
+- `desired_count`: Number of tasks to run (default: `1`)
+- `min_count`/`max_count`: ASG instance limits (default: `1`/`1` to minimize cost)
+- `key_name`: EC2 key pair name (default: `chatbot-key-pair`) - **Must exist in AWS!**
+- `force_new_deployment`: Force deployment on every apply (default: `false`)
+
+**Security Warning**:
+- The default credentials are placeholders. **You must change `db_username` and `db_password` before deploying to any environment!**
+- **You must create an EC2 key pair** in AWS console or CLI before deploying ECS (or change the `key_name` variable)
+- **You must provide a `container_image`** - this is required with no default value
+
+**Important Notes**:
+- SSM Parameter Store ARNs for Cognito and OpenAI are currently placeholders in `main.tf` - update these after creating Cognito module
+- ECS will fetch secrets from SSM Parameter Store at container startup (no secrets in environment variables!)
 
 ### Step 4: Initialize Main Configuration
 
@@ -185,6 +235,26 @@ This Terraform configuration will create:
   - `/chatbot/db/endpoint`
   - `/chatbot/db/name`
   - `/chatbot/db/port`
+
+**ECS Module**:
+- 1 ECS cluster with EC2 launch type
+- 1 ECS service with rolling deployment configuration
+- 1 Task definition with container specifications
+- 1 Capacity provider with managed scaling
+- 1 Autoscaling group (1 EC2 instance by default)
+- 1 Launch template with ECS-optimized AMI
+- 1 Security group for ECS tasks (ingress rules to be added when ALB is created)
+- 3 IAM roles:
+  - EC2 instance profile role (for ECS agent)
+  - Task execution role (for pulling images and fetching secrets from SSM)
+  - Task role (for application permissions)
+- Secrets management: Container fetches credentials from SSM Parameter Store at startup
+
+**Cost Optimization Features**:
+- NAT Gateway disabled by default (enable only if needed)
+- Minimal instance counts (1 task, 1 EC2 instance)
+- Free tier eligible instance types (t3.micro, db.t3.micro)
+- No Multi-AZ deployment by default
 
 ## Usage
 
