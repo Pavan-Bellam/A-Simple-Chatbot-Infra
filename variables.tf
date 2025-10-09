@@ -82,6 +82,91 @@ variable "db_engine_version" {
 }
 
 variable "db_engine" {
-  type    = string
-  default = "postgres"
+  type        = string
+  default     = "postgres"
+  description = "Database engine"
+}
+
+#ecs
+variable "cluster_name" {
+  type        = string
+  default     = "chatbot-ecs-cluster"
+  description = "Name of the ECS cluster"
+}
+
+variable "container_image" {
+  type        = string
+  description = "Docker image for the container (e.g., account.dkr.ecr.region.amazonaws.com/repo:tag)"
+}
+
+variable "container_port" {
+  type        = number
+  default     = 8080
+  description = "Port exposed by the container application"
+}
+
+variable "task_cpu" {
+  type        = number
+  default     = 512
+  description = "CPU units for the ECS task (1 vCPU = 1024)"
+}
+
+variable "task_memory" {
+  type        = number
+  default     = 1024
+  description = "Memory for the ECS task in MB"
+}
+
+variable "ecs_instance_type" {
+  type        = string
+  default     = "t3.micro"
+  description = "EC2 instance type for ECS cluster"
+}
+
+variable "desired_count" {
+  type        = number
+  default     = 1
+  description = "Desired number of ECS tasks to run"
+}
+
+variable "min_count" {
+  type        = number
+  default     = 1
+  description = "Minimum number of EC2 instances in autoscaling group"
+}
+
+variable "max_count" {
+  type        = number
+  default     = 1
+  description = "Maximum number of EC2 instances in autoscaling group"
+}
+
+variable "key_name" {
+  type        = string
+  default     = "chatbot-key-pair"
+  description = "Name of the EC2 key pair for SSH access"
+}
+
+variable "force_new_deployment" {
+  type        = bool
+  default     = false
+  description = "Force a new ECS deployment on every Terraform apply"
+}
+
+variable "capacity_provider_target" {
+  type        = number
+  default     = 100
+  description = "Target capacity percentage for the ECS capacity provider"
+}
+
+variable "capacity_provider_min_step" {
+  type        = number
+  default     = 1
+  description = "Minimum scaling step size for capacity provider"
+}
+
+variable "capacity_provider_max_step" {
+  type        = number
+  default     = 1
+  description = "Maximum scaling step size for capacity provider"
 }
